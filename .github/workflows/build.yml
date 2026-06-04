@@ -67,7 +67,10 @@ jobs:
           tool: cargo-audit
 
       - name: cargo audit
-        run: cargo audit --file src-tauri/Cargo.lock
+        # RUSTSEC-2023-0071 (rsa Marvin timing sidechannel) has no fixed release;
+        # rsa is pulled transitively via russh/ssh-key for RSA key support and
+        # cannot be dropped. Revisit when a patched rsa is published.
+        run: cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2023-0071
 
   # Create the draft Release exactly once before the build matrix fans out.
   # Doing this in a single job avoids the race where parallel matrix legs each

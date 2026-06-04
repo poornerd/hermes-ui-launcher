@@ -10,13 +10,20 @@ Installer is a few MB — no bundled browser.
 
 ## How it works
 
-1. **Config tab** — set the server host/port/user, auth (SSH key or password),
-   and for each service: local port, remote host/port, a start command, and a
-   health-check command.
+1. **Config tab** — set the server host/port/user, auth (SSH agent, key, or
+   password), and for each service: local port, remote host/port, a start
+   command, and a health-check command.
 2. **Launch tab** — click *Launch*. The app connects over SSH, runs the
    health-check, runs the start command **only if the service is down**, opens
    the tunnel, and launches the browser.
 3. **Logs tab** — live stream of SSH/remote command output.
+
+**Authentication** defaults to **SSH agent** — it uses keys already loaded in
+your `ssh-agent` (`ssh-add -l` to list, `ssh-add` to load one), the same way the
+system `ssh` client works. This supports passphrase-protected keys and
+hardware-backed keys (YubiKey/FIDO, macOS Secure Enclave) that never expose
+private bytes on disk. A private-key file path and password auth are also
+available.
 
 Passwords are stored in the OS keychain (Keychain / Credential Manager /
 libsecret), never on disk. Non-secret config lives in the OS config dir under

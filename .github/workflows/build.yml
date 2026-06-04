@@ -1,0 +1,144 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    branches: [master]
+
+# Needed by tauri-action to create/update the GitHub Release on tag pushes.
+permissions:
+  contents: write
+
+env:
+  # Tauri v2 Linux system dependencies. keyring uses the pure-Rust
+  # sync-secret-service feature, so libsecret-1-dev is intentionally NOT included.
+  LINUX_DEPS: >-
+    libwebkit2gtk-4.1-dev
+    build-essential
+    curl
+    wget
+    file
+    libxdo-dev
+    libssl-dev
+    libayatana-appindicator3-dev
+    librsvg2-dev
+    patchelf
+
+jobs:
+  lint:
+    name: Lint & type check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # clippy compiles the tauri crate, which links against webkit on Linux.
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $LINUX_DEPS
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: svelte-check
+        run: npm run check
+
+      - name: cargo fmt
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: cargo audit
+        run: cargo audit --file src-tauri/Cargo.lock
+
+  # Create the draft Release exactly once before the build matrix fans out.
+  # Doing this in a single job avoids the race where parallel matrix legs each
+  # create a release for the same tag (draft releases don't enforce unique tags,
+  # so concurrent get-or-create can produce duplicate drafts). On branch/PR
+  # pushes the step is skipped and release_id is empty -> build-only gate.
+  create-release:
+    name: Create draft release
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+    steps:
+      - name: Create draft release on tag
+        id: create
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Hermes Launcher ${tag}`,
+              draft: true,
+              prerelease: false,
+            });
+            core.setOutput('release_id', data.id);
+
+  build:
+    name: Build (${{ matrix.platform }} ${{ matrix.args }})
+    needs: create-release
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: macos-latest,   args: "--target aarch64-apple-darwin" }
+          - { platform: macos-latest,   args: "--target x86_64-apple-darwin" }
+          - { platform: ubuntu-22.04,   args: "" }
+          - { platform: windows-latest, args: "" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $LINUX_DEPS
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.platform }}-${{ matrix.args }}
+
+      - name: Build app (and release on tag)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
+          # On tag pushes create-release supplies the id of the single draft
+          # Release, and every matrix leg uploads its installers into it. On
+          # branch/PR pushes release_id is empty -> build-only gate.
+          releaseId: ${{ needs.create-release.outputs.release_id }}

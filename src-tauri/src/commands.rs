@@ -311,7 +311,7 @@ async fn launch_inner(
     // Decide whether a tunnel needs creating (drop a dead one first).
     let need_tunnel = {
         let mut inner = state.inner.lock().await;
-        if inner.tunnels.get(name).map_or(false, |t| t.is_finished()) {
+        if inner.tunnels.get(name).is_some_and(|t| t.is_finished()) {
             inner.tunnels.remove(name);
         }
         !inner.tunnels.contains_key(name)

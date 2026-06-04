@@ -40,8 +40,8 @@
     savedMsg = "";
     try {
       await saveConfig($state.snapshot(configStore.config), password || undefined);
-      // Switching to key auth removes any stored password from the keychain.
-      if (configStore.config.auth.mode === "key" && pwStored) {
+      // Switching away from password auth removes any stored password from the keychain.
+      if (configStore.config.auth.mode !== "password" && pwStored) {
         await clearPassword();
         pwStored = false;
       }
@@ -101,6 +101,7 @@
       <label class="narrow">
         Method
         <select bind:value={cfg.auth.mode}>
+          <option value="agent">SSH agent</option>
           <option value="key">SSH key</option>
           <option value="password">Password</option>
         </select>
@@ -113,7 +114,7 @@
             <button type="button" class="browse" onclick={browseKey}>Browse…</button>
           </span>
         </label>
-      {:else}
+      {:else if cfg.auth.mode === "password"}
         <label class="grow">
           Password {#if pwStored}<span class="muted">(saved — leave blank to keep)</span>{/if}
           <span class="pick">
@@ -123,6 +124,11 @@
             {/if}
           </span>
         </label>
+      {:else}
+        <div class="grow field">
+          <span class="field-label">ssh-agent</span>
+          <span class="hint">Uses keys loaded in your ssh-agent (run <code>ssh-add</code> to load one).</span>
+        </div>
       {/if}
     </div>
   </section>
@@ -223,5 +229,23 @@
   .muted {
     color: var(--muted);
     font-weight: 400;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 120px;
+  }
+  .field-label {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .hint {
+    color: var(--muted);
+    font-size: 0.82rem;
+    padding: 4px 0;
+  }
+  .hint code {
+    font-family: ui-monospace, monospace;
   }
 </style>

@@ -32,13 +32,23 @@ impl Default for ServerConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct AuthConfig {
-    /// "key" or "password"
+    /// "agent", "key", or "password"
     pub mode: String,
     /// path to private key (when mode == "key")
     pub key_path: String,
+}
+impl Default for AuthConfig {
+    fn default() -> Self {
+        // ssh-agent is the least-surprise default: it matches the system `ssh`
+        // client and works with passphrase-protected and hardware-backed keys.
+        Self {
+            mode: "agent".to_string(),
+            key_path: String::new(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]

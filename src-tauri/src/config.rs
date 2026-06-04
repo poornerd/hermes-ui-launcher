@@ -24,7 +24,11 @@ pub struct ServerConfig {
 }
 impl Default for ServerConfig {
     fn default() -> Self {
-        Self { host: String::new(), port: default_port(), username: String::new() }
+        Self {
+            host: String::new(),
+            port: default_port(),
+            username: String::new(),
+        }
     }
 }
 
@@ -102,7 +106,10 @@ pub fn load() -> AppConfig {
     match serde_json::from_str(&text) {
         Ok(cfg) => cfg,
         Err(e) => {
-            eprintln!("config parse error ({}): {e}; using defaults", path.display());
+            eprintln!(
+                "config parse error ({}): {e}; using defaults",
+                path.display()
+            );
             AppConfig::default()
         }
     }

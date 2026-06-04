@@ -43,29 +43,33 @@ pub async fn connect(
     let expected = config::load_known_host(&server.host, server.port);
     let had_pin = expected.is_some();
     let seen: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-    let client = Client { expected, seen: seen.clone() };
-
-    let mut handle = match client::connect(config, (server.host.as_str(), server.port), client).await
-    {
-        Ok(h) => h,
-        Err(e) => {
-            // Distinguish a rejected (changed) host key from other connect errors.
-            if had_pin {
-                if let Some(fp) = seen.lock().unwrap().clone() {
-                    return Err(anyhow!(
-                        "host key changed for {}:{} (server now offers {fp}). \
-                         If this is expected, remove the entry from known_hosts.json and retry.",
-                        server.host,
-                        server.port
-                    ));
-                }
-            }
-            return Err(e.into());
-        }
+    let client = Client {
+        expected,
+        seen: seen.clone(),
     };
 
+    let mut handle =
+        match client::connect(config, (server.host.as_str(), server.port), client).await {
+            Ok(h) => h,
+            Err(e) => {
+                // Distinguish a rejected (changed) host key from other connect errors.
+                if had_pin {
+                    if let Some(fp) = seen.lock().unwrap().clone() {
+                        return Err(anyhow!(
+                            "host key changed for {}:{} (server now offers {fp}). \
+                         If this is expected, remove the entry from known_hosts.json and retry.",
+                            server.host,
+                            server.port
+                        ));
+                    }
+                }
+                return Err(e.into());
+            }
+        };
+
     let result: AuthResult = if auth.mode == "password" {
-        let pw = password.ok_or_else(|| anyhow!("password auth selected but no password stored"))?;
+        let pw =
+            password.ok_or_else(|| anyhow!("password auth selected but no password stored"))?;
         handle.authenticate_password(&server.username, pw).await?
     } else {
         if auth.key_path.ends_with(".pub") {

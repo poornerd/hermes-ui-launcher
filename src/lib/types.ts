@@ -6,7 +6,7 @@ export interface ServerConfig {
 }
 
 export interface AuthConfig {
-  mode: "key" | "password";
+  mode: "agent" | "key" | "password";
   key_path: string;
 }
 
@@ -38,7 +38,7 @@ export function defaultService(localPort: number, remotePort: number): ServiceCo
 export function defaultConfig(): AppConfig {
   return {
     server: { host: "", port: 22, username: "" },
-    auth: { mode: "key", key_path: "" },
+    auth: { mode: "agent", key_path: "" },
     dashboard: defaultService(8080, 8080),
     webui: defaultService(3000, 3000),
   };

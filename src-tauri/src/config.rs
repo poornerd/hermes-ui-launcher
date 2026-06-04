@@ -24,7 +24,11 @@ pub struct ServerConfig {
 }
 impl Default for ServerConfig {
     fn default() -> Self {
-        Self { host: String::new(), port: default_port(), username: String::new() }
+        Self {
+            host: String::new(),
+            port: default_port(),
+            username: String::new(),
+        }
     }
 }
 
@@ -40,7 +44,10 @@ impl Default for AuthConfig {
     fn default() -> Self {
         // ssh-agent is the least-surprise default: it matches the system `ssh`
         // client and works with passphrase-protected and hardware-backed keys.
-        Self { mode: "agent".to_string(), key_path: String::new() }
+        Self {
+            mode: "agent".to_string(),
+            key_path: String::new(),
+        }
     }
 }
 
@@ -109,7 +116,10 @@ pub fn load() -> AppConfig {
     match serde_json::from_str(&text) {
         Ok(cfg) => cfg,
         Err(e) => {
-            eprintln!("config parse error ({}): {e}; using defaults", path.display());
+            eprintln!(
+                "config parse error ({}): {e}; using defaults",
+                path.display()
+            );
             AppConfig::default()
         }
     }

@@ -43,7 +43,10 @@ struct Inner {
 fn redact(line: &str) -> String {
     const KEYS: [&str; 6] = ["token", "secret", "password", "passwd", "apikey", "auth"];
     let is_sensitive = |k: &str| {
-        let norm = k.trim_start_matches('-').to_ascii_lowercase().replace(['_', '-'], "");
+        let norm = k
+            .trim_start_matches('-')
+            .to_ascii_lowercase()
+            .replace(['_', '-'], "");
         KEYS.iter().any(|s| norm.ends_with(s))
     };
     let mut out: Vec<String> = Vec::new();
@@ -75,7 +78,13 @@ fn logger(app: &AppHandle, service: &str) -> impl Fn(String) + Clone + Send + Sy
     move |line| {
         for part in line.split_inclusive('\n') {
             let clean = redact(part.trim_end());
-            let _ = app.emit("log", LogLine { service: service.clone(), line: clean });
+            let _ = app.emit(
+                "log",
+                LogLine {
+                    service: service.clone(),
+                    line: clean,
+                },
+            );
         }
     }
 }
@@ -120,7 +129,10 @@ async fn ensure_connected(
     }
 
     let log = logger(app, "ssh");
-    log(format!("connecting to {}@{}...", cfg.server.username, cfg.server.host));
+    log(format!(
+        "connecting to {}@{}...",
+        cfg.server.username, cfg.server.host
+    ));
     let password = if cfg.auth.mode == "password" {
         config::get_password()
     } else {
@@ -257,13 +269,19 @@ async fn launch_inner(
         let err_name = name.to_string();
         let proc = tokio::spawn(async move {
             match ssh::exec(start_handle.as_ref(), &start_cmd, start_log).await {
-                Ok(code) if code != 0 => {
-                    status(&err_app, &err_name, "error", &format!("start command exited {code}"))
-                }
+                Ok(code) if code != 0 => status(
+                    &err_app,
+                    &err_name,
+                    "error",
+                    &format!("start command exited {code}"),
+                ),
                 Ok(_) => {}
-                Err(e) => {
-                    status(&err_app, &err_name, "error", &format!("start command error: {e}"))
-                }
+                Err(e) => status(
+                    &err_app,
+                    &err_name,
+                    "error",
+                    &format!("start command error: {e}"),
+                ),
             }
         });
         {
@@ -293,7 +311,7 @@ async fn launch_inner(
     // Decide whether a tunnel needs creating (drop a dead one first).
     let need_tunnel = {
         let mut inner = state.inner.lock().await;
-        if inner.tunnels.get(name).map_or(false, |t| t.is_finished()) {
+        if inner.tunnels.get(name).is_some_and(|t| t.is_finished()) {
             inner.tunnels.remove(name);
         }
         !inner.tunnels.contains_key(name)

@@ -45,26 +45,29 @@ pub async fn connect(
     let expected = config::load_known_host(&server.host, server.port);
     let had_pin = expected.is_some();
     let seen: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-    let client = Client { expected, seen: seen.clone() };
-
-    let mut handle = match client::connect(config, (server.host.as_str(), server.port), client).await
-    {
-        Ok(h) => h,
-        Err(e) => {
-            // Distinguish a rejected (changed) host key from other connect errors.
-            if had_pin {
-                if let Some(fp) = seen.lock().unwrap().clone() {
-                    return Err(anyhow!(
-                        "host key changed for {}:{} (server now offers {fp}). \
-                         If this is expected, remove the entry from known_hosts.json and retry.",
-                        server.host,
-                        server.port
-                    ));
-                }
-            }
-            return Err(e.into());
-        }
+    let client = Client {
+        expected,
+        seen: seen.clone(),
     };
+
+    let mut handle =
+        match client::connect(config, (server.host.as_str(), server.port), client).await {
+            Ok(h) => h,
+            Err(e) => {
+                // Distinguish a rejected (changed) host key from other connect errors.
+                if had_pin {
+                    if let Some(fp) = seen.lock().unwrap().clone() {
+                        return Err(anyhow!(
+                            "host key changed for {}:{} (server now offers {fp}). \
+                         If this is expected, remove the entry from known_hosts.json and retry.",
+                            server.host,
+                            server.port
+                        ));
+                    }
+                }
+                return Err(e.into());
+            }
+        };
 
     let result: AuthResult = match auth.mode.as_str() {
         "password" => {
@@ -123,12 +126,17 @@ async fn connect_agent() -> Result<DynAgent> {
         if let Ok(a) = AgentClient::connect_pageant().await {
             return Ok(a.dynamic());
         }
-        // Fall through to the env-var path (some setups still export SSH_AUTH_SOCK).
+        // connect_env is unix-only in russh; the named pipe and Pageant are the
+        // only agent transports on Windows.
+        Err(anyhow!("no ssh-agent reachable (tried the OpenSSH named pipe and Pageant); load keys with `ssh-add`, or switch to key/password auth"))
     }
-    AgentClient::connect_env()
-        .await
-        .map(|a| a.dynamic())
-        .map_err(|e| anyhow!("no ssh-agent reachable ({e}); load keys with `ssh-add`, or switch to key/password auth"))
+    #[cfg(unix)]
+    {
+        AgentClient::connect_env()
+            .await
+            .map(|a| a.dynamic())
+            .map_err(|e| anyhow!("no ssh-agent reachable ({e}); load keys with `ssh-add`, or switch to key/password auth"))
+    }
 }
 
 /// Authenticate by asking the running ssh-agent to sign challenges. Tries each
@@ -155,7 +163,12 @@ async fn authenticate_agent(handle: &mut Handle<Client>, username: &str) -> Resu
         // HRTB error that propagates up to the Tauri command futures.
         let auth: std::pin::Pin<
             Box<dyn std::future::Future<Output = Result<AuthResult, russh::AgentAuthError>> + Send>,
-        > = Box::pin(handle.authenticate_publickey_with(username.to_string(), key, hash, &mut agent));
+        > = Box::pin(handle.authenticate_publickey_with(
+            username.to_string(),
+            key,
+            hash,
+            &mut agent,
+        ));
         // A sign error on one identity (unsupported key type, transient agent
         // hiccup) shouldn't abort auth: skip it and try the next, mirroring the
         // system `ssh` client. Only report failure once all are exhausted.

@@ -126,12 +126,17 @@ async fn connect_agent() -> Result<DynAgent> {
         if let Ok(a) = AgentClient::connect_pageant().await {
             return Ok(a.dynamic());
         }
-        // Fall through to the env-var path (some setups still export SSH_AUTH_SOCK).
+        // connect_env is unix-only in russh; the named pipe and Pageant are the
+        // only agent transports on Windows.
+        Err(anyhow!("no ssh-agent reachable (tried the OpenSSH named pipe and Pageant); load keys with `ssh-add`, or switch to key/password auth"))
     }
-    AgentClient::connect_env()
-        .await
-        .map(|a| a.dynamic())
-        .map_err(|e| anyhow!("no ssh-agent reachable ({e}); load keys with `ssh-add`, or switch to key/password auth"))
+    #[cfg(unix)]
+    {
+        AgentClient::connect_env()
+            .await
+            .map(|a| a.dynamic())
+            .map_err(|e| anyhow!("no ssh-agent reachable ({e}); load keys with `ssh-add`, or switch to key/password auth"))
+    }
 }
 
 /// Authenticate by asking the running ssh-agent to sign challenges. Tries each

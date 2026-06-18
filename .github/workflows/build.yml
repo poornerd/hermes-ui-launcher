@@ -163,7 +163,7 @@ jobs:
       # The .p8 private key is stored base64-encoded in a secret and written to
       # a file that tauri reads through APPLE_API_KEY_PATH. macOS tag builds only.
       - name: Write App Store Connect API key
-        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/') && secrets.APPLE_API_KEY_P8_BASE64 != ''
+        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/')
         run: echo "${{ secrets.APPLE_API_KEY_P8_BASE64 }}" | base64 --decode > "${{ runner.temp }}/apple_api_key.p8"
 
       - name: Build app (and release on tag)
